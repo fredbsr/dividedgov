@@ -1,0 +1,361 @@
+---
+title: "Coalition Management Under Divided/Unified Government"
+author:
+- Carlos Pereira
+- Marcus Melo
+- Frederico Bertholini
+date: "September 8, 2016"
+subtitle: ECPR 2016
+output: ioslides
+---
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE,include=F}
+
+
+# Packages
+repmis::LoadandCite(c("downloader","readxl","utils","stringr","xts","spikeslab",
+                 "stargazer","xtable","PerformanceAnalytics","bsts","broom",
+                 "ggplot2","plotly","ggthemes","htmlwidgets","sandwich","lmtest","reshape","dplyr","tidyr"))
+
+#### Latin America ####
+# Loading LA data on divided governemnt
+download("https://www.dropbox.com/s/4w8ps0f01fc7lfr/div_gov.RData?raw=1", dest = "div_gov.RData",mode = "wb", cacheOK = TRUE)
+
+load("div_gov.RData")
+
+# ransforming ifs in factors
+DPI$ifs <- tolower(DPI$ifs)
+DPI.org$ifs <- tolower(DPI.org$ifs)
+DPI.select$ifs <- tolower(DPI.select$ifs)
+
+df$ifs <- as.factor(df$ifs)
+
+#### Brazil ####
+
+
+# Use the link if don't have a shared folder
+download("https://www.dropbox.com/s/stua8w2k45nzfmb/dataset_coalmngm_brazil_v7.xlsx?raw=1",dest = "coalmngm.xlsx",mode = "wb", cacheOK = TRUE)
+
+download("https://www.dropbox.com/s/qxk8a3wa6412eiz/IGC_graphs_english_bw.xlsx?raw=1",dest = "ICG.xlsx",mode = "wb", cacheOK = TRUE)
+
+rawdata_coalmngm <- read_excel("coalmngm.xlsx", 
+                               col_names = TRUE, skip = 6)[,(1:569)]
+
+raw_ICG <- read_excel("ICG.xlsx", 
+                               col_names = TRUE)
+raw_ICG$time_series2 <- 1:228
+
+
+rawdata_coalmngm <- left_join(rawdata_coalmngm,raw_ICG[c(33,18,7)])
+
+# Making dates readable
+rawdata_coalmngm$date <- as.character(rawdata_coalmngm$date)
+#padding zeros to correct
+
+rawdata_coalmngm$date <- str_pad(rawdata_coalmngm$date, 7, pad = "0")
+
+# Using package to have years and months
+rawdata_coalmngm$date_yearmon <- as.yearmon(rawdata_coalmngm$date,format="%m %Y")
+# head(rawdata_coalmngm$date_yearmon)
+
+# bulding complete dates with days because R doesn't like dates without days
+rawdata_coalmngm$date_complete <- paste("01",rawdata_coalmngm$date)
+rawdata_coalmngm$date_complete = as.Date(rawdata_coalmngm$date_complete, "%d %m %Y")
+# head(rawdata_coalmngm$date_complete)
+
+# making sure attributes are ok
+rawdata_coalmngm$month <- as.numeric(as.character(rawdata_coalmngm$month))
+rawdata_coalmngm$year <- as.numeric(as.character(rawdata_coalmngm$year))
+rawdata_coalmngm$coal_size <- as.numeric(as.character(rawdata_coalmngm$coal_size))
+rawdata_coalmngm$pow_conc <- as.numeric(as.character(rawdata_coalmngm$pow_conc))
+rawdata_coalmngm$pow_conc2 <- as.numeric(as.character(rawdata_coalmngm$pow_conc2))
+rawdata_coalmngm$ideo_heter <- as.numeric(as.character(rawdata_coalmngm$ideo_heter))
+rawdata_coalmngm$ICG_fator <- as.numeric(as.character(rawdata_coalmngm$ICG_fator))
+
+# Selection from raw data ####
+
+# keeping only the data that I will use
+list <- names(rawdata_coalmngm)
+select <- list[c(1:9,528,530,533,534,536,537,538,540,543:545,547:556,559,560:564,566,568,569,570,571)]
+data_coalmngm <- rawdata_coalmngm[10:324,c(select)]
+
+# names(data_coalmngm)
+data_coalmngm$decree_reliance <- data_coalmngm$MPV/data_coalmngm$bills_exec
+rm(select,list,rawdata_coalmngm,raw_ICG)
+
+# Creating abs_dist variables
+# names(data_coalmngm)
+data_coalmngm <- data_coalmngm %>%
+  mutate(abs_dist_pres_con = abs(ideo_dist_pres_con),
+         abs_dist_pres_coal = abs(ideo_dist_pres_coal),
+         abs_dist_coal_con = abs(ideo_dist_coal_con),
+         effort_coal = abs_dist_pres_con - abs_dist_coal_con,
+         gdp_m_real=scale(gdp))
+
+#names(data_coalmngm_wide)
+
+# Transforming into a time series ####
+sel_data.ts <- as.xts(ts(data_coalmngm[c(1,4,5,10:47)],start=c(1988, 10), end=c(2014, 12),frequency=12))
+
+model_data <- xts::apply.quarterly(sel_data.ts,mean,na.rm=T)
+
+
+# Create a dataset of variables with full observations and use Big Data algorithms ####
+
+#Create a DF
+DF_model <- data.frame(time=index(model_data), coredata(model_data))
+
+
+DF_interesse <- DF_model[,c("ideo_dist_pres_con","ideo_dist_pres_coal",
+           "ideo_dist_coal_con","decree_reliance","pres_pop",
+           "gdp_m_real","leg_supp",
+           "GCI_trend_GDP")]
+
+
+#Setting the table type
+#table <- "latex" 
+table <- "text"
+#table <- "html"
+
+knitr::opts_chunk$set(fig.pos = 'H')
+
+```
+
+# Reconceptualizing Divided Government
+
+## A pure arithmetical definition
+
+- Criterion for distinguishing governments types was essentially arithmetical: the size of the presidential coalition and the resulting minority or majority status.
+
+- The arithmetical definition of divided government, nevertheless, fails to address the issue  in multiparty presidential regimes.
+
+- Presidents elected in multiparty systems with significant party fragmentation in the legislature often face a minority condition. 
+
+- That is, divided government would necessarily be the norm.
+
+## Coalitions, coalitions, coalitions
+
+- The lack of partisan majority backing the president does not necessarily mean that the opposition automatically control the legislature. 
+
+- Instead, the very often outcome is to observe a coalition post-electoral majority supporting the president, usually composed by more than one political party. 
+
+- Figueiredo et al (2009): from 1979 through 2006, Latin America was host six countries (Bolivia, Brazil, Chile, Colombia, Ecuador, and Panama) that coalition governments throughout that same period. 
+
+- Other definitions fail to explain the multiparty presidentialism case
+
+## The definition based on preferences
+- We claim that the degree of congruence between the preference of the presidential coalition and the preference of the floor of the Congress is the crucial ingredient.
+
+- When the median preference of the presidential coalition matches the median preference of the floor of the Congress we consider a unified government. 
+
+- When the median preferences of the floor and the coalition are incongruent we have a divided government. 
+
+## Our approach
+
+- The higher the preference incongruence between the president’s coalition and the floor, the more difficult would be the coalition management and the higher the probability that the Congress would work as the opposite of progress. 
+
+- Our approach considers what the consequences of congruence are, and more importantly how congruence can be used analytically as a criterion for identifying governments.
+
+# Towards a new definition of Divided Government
+
+## Divided government in Latin America
+```{r ideological differences plot, eval=T,echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+
+# Quero ver quais os divididos que têm maioria
+DPI.join <- left_join(filter(df,is.na(div.gov)==F,ifs!="bra"),DPI[DPI$allhouse>=0,c("ifs","year","allhouse")])
+DPI.join$allhouse <- DPI.join$allhouse
+DPI.join$allhouse <- factor(DPI.join$allhouse,levels = c(0,1),labels=c("Minority Government","Majority Government"))
+DPI.join <- DPI.join[is.na(DPI.join$allhouse)==F,]
+
+LA.divgov <- ggplot() +
+  geom_text(data = DPI.join,
+            aes(x=year,y=div.gov,label=ifs,colour=country)) +
+#  geom_line(data = DPI.join,
+#            aes(x=year,y=div.gov,label=ifs,colour=country),size=0.1,alpha=0.5)+
+  theme_bw(base_family = "Helvetica", base_size = 11) +
+  theme(legend.background = element_blank(),
+          legend.key = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          strip.background = element_rect(fill="white"),
+          plot.background = element_blank(),
+          axis.line = element_blank(),
+          panel.grid.major.x = element_line(size = 0.1),
+          panel.grid.major.y = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position="bottom",
+          legend.title=element_blank(),
+          axis.ticks = element_blank())+
+  facet_grid(.~allhouse)+
+  annotate("rect", ymin = -1, ymax = 1,xmin=-Inf,xmax=Inf,alpha = .2) +
+  ylab("Ideological differences") +
+  ggtitle("") 
+
+LA.divgov
+
+```
+
+# Divided Government in Brazil
+
+## Brazilian Coalitions
+
+```{r, echo=FALSE,results='asis',warning=FALSE,message=FALSE}
+
+DF_interesse <- DF_model[,c("leg_supp","GCI_trend_GDP","abs_dist_coal_con","ideo_dist_coal_con",
+                            "agenda_size","av_cong_ideol","enpp","gdp_m_real","pres_pop")]
+
+
+data_coalmngm$date_ym <- as.yearmon(data_coalmngm$date)
+
+brazil.divgov <- ggplot(left_join(DF_model,data_coalmngm[,c("time_series","term")]),aes(x=time,y=ideo_dist_coal_con,group=term,colour=term)) + 
+  geom_line(size=1.5) + 
+  scale_x_yearmon("") +
+  annotate("rect", ymin = -1, ymax = 1,xmin=-Inf,xmax=Inf,alpha = .2) +
+  scale_y_continuous("Ideological Difference") +
+  theme_bw(base_family = "Helvetica", base_size = 11) +
+  theme(legend.background = element_blank(),
+          legend.key = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          strip.background = element_blank(),
+          plot.background = element_blank(),
+          axis.line = element_blank(),
+          panel.grid.major.x = element_line(size = 0.1),
+          panel.grid.major.y = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position="top",
+          legend.title=element_blank(),
+          axis.ticks = element_blank())+
+  ggtitle("")
+
+brazil.divgov
+
+```
+
+## Hipotheses
+
+1. Ideological distance will increase Governing Costs
+
+2. Ideological difference will decrease Legislative Support
+
+## Legislative Support  {.flexbox .vcenter .hcenter }
+Spike-and-Slab with Newey-West correction
+```{r legislative support NW reg, echo=FALSE,results='asis',warning=FALSE,message=FALSE}
+lm.q.6 <- lm(DF_model$leg_supp ~ DF_model$ideo_dist_coal_con + DF_model$agenda_size + DF_model$av_cong_ideol + DF_model$enpp + scale(DF_model$gdp_m_real) + DF_model$pres_pop)
+rlm.q.6 <- coeftest(lm.q.6, vcov. = NeweyWest)
+
+
+leg.supp_spkslb <- broom::tidy(rlm.q.6) %>%
+  mutate(upper=estimate+(1.96*std.error),lower=estimate-(1.96*std.error),term=c("Constant","Ideo Diff Coalition-Congress", "Agenda Size",
+                               "Average Congress Ideology","Effective Number of Parties", "GDP","Popularity")) %>%
+  filter(term!="Constant")
+  
+
+ggplot(leg.supp_spkslb, aes(estimate, term, color = term)) +
+    geom_point(shape=10,size=2) +
+    geom_errorbarh(aes(xmin = leg.supp_spkslb$lower, xmax = leg.supp_spkslb$upper), height = .2) +
+    geom_vline(xintercept=0) +
+    theme_bw(base_family = "Helvetica", base_size = 11) +
+  ylab("") +
+  theme(legend.background = element_blank(),
+          legend.key = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          strip.background = element_blank(),
+          plot.background = element_blank(),
+          axis.line = element_blank(),
+          panel.grid.major.x = element_line(size = 0.1),
+          panel.grid.major.y = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position="none",
+          legend.title=element_blank(),
+          axis.ticks = element_blank())+
+  ggtitle("")
+
+
+
+```
+
+## Governing Costs {.flexbox .vcenter .hcenter}
+Spike-and-Slab with Newey-West correction
+```{r governing costs NW reg, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+
+lm.m.6 <- lm(DF_model$GCI_trend_GDP ~ DF_model$abs_dist_coal_con + lag(DF_model$abs_dist_coal_con,1)+ DF_model$agenda_size + DF_model$av_cong_ideol + DF_model$enpp + DF_model$pres_pop)
+rlm.m.6 <- coeftest(lm.m.6, vcov. = NeweyWest)
+
+gov.costs_spkslb <- broom::tidy(rlm.m.6) %>%
+  mutate(upper=estimate+(1.96*std.error),lower=estimate-(1.96*std.error),term=c("Constant","Ideo Dist Coalition-Congress", "Ideo Dist Coalition-Congress (lag1)", "Agenda Size",
+                               "Average Congress Ideology","Effective Number of Parties", "Popularity")) %>%
+  filter(term!="Constant")
+  
+
+ggplot(gov.costs_spkslb, aes(estimate, term, color = term)) +
+    geom_point(shape=10,size=2) +
+    geom_errorbarh(aes(xmin = gov.costs_spkslb$lower, xmax = gov.costs_spkslb$upper), height = .2) +
+    geom_vline(xintercept=0) +
+    theme_bw(base_family = "Helvetica", base_size = 11) +
+  ylab("") +
+  theme(legend.background = element_blank(),
+          legend.key = element_blank(),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          strip.background = element_blank(),
+          plot.background = element_blank(),
+          axis.line = element_blank(),
+          panel.grid.major.x = element_line(size = 0.1),
+          panel.grid.major.y = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position="none",
+          legend.title=element_blank(),
+          axis.ticks = element_blank())+
+  ggtitle("")
+
+
+```
+
+# Bayesian Structural Time Series - Modeling Divided Government and Governing Costs in Brazil
+
+## The model
+
+- Addressing trends or seasonality
+
+- Bayesian Structural Time Series is a tool that uses space state methods to provide a complete model of the time series, while maintaining the spike-and-slab idea in the regression components.
+
+- Space state model used as a base for developing the results is a local linear trend model with quarterly seasonality
+
+- Probabilities higher than 50% indicate a strong chance of having this variable as a good predictor.
+
+## Inclusion probabilities
+```{r, echo=FALSE,results='asis',warning=FALSE,message=FALSE}
+DF_bayes <- DF_interesse[complete.cases(DF_interesse),c("GCI_trend_GDP","abs_dist_coal_con","ideo_dist_coal_con",
+                            "agenda_size","av_cong_ideol","enpp","pres_pop")]
+
+ss <- AddLocalLinearTrend(list(), DF_bayes$GCI_trend_GDP)
+ss <- AddSeasonal(ss, DF_bayes$GCI_trend_GDP, nseasons = 4)
+bsts.reg <- bsts(GCI_trend_GDP ~ ., state.specification = ss, 
+                 data = DF_bayes, 
+                 niter = 10000, ping=0, seed=2016)
+burn <- SuggestBurn(.1, bsts.reg) # descobrir o que faz
+
+
+PlotBstsCoefficients(bsts.reg)
+
+```
+
+## Predictors
+```{r, echo=FALSE,results='asis',warning=FALSE,message=FALSE}
+
+PlotBstsPredictors(bsts.reg,
+                     burn = SuggestBurn(.1, bsts.reg),
+                     inclusion.threshold = .5,
+                     ylim = NULL,
+                     flip.signs = TRUE,
+                     show.legend = T,
+                     grayscale = TRUE,
+                     short.names = TRUE)
+
+# plot(bsts.reg,"predictors",inclusion.threshold = .5,legend("bottomright", legend = c(" ", " ")))
+# tentar colocar legenda depois
+
+```
+
